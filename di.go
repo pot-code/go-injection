@@ -53,25 +53,34 @@ func (dic *DIContainer) Register(shell interface{}) {
 			if !fieldVal.CanSet() {
 				panic(fmt.Errorf("field '%s' should be exported", sField.Name))
 			}
-			if !isInterfaceType(sField.Type) {
-				// if field type is concrete type, register it recursively
-				eType := sField.Type.Elem()
-				dic.Register(reflect.New(eType).Interface())
+			if !isInterfaceType(sField.Type) && sField.Type.Kind() != reflect.Ptr {
+				panic(fmt.Errorf("field '%s' should be pointer or interface type", sField.Name))
 			}
 			tf := &tagField{name: depName, fType: sField.Type, fVal: fieldVal}
 			cShell.fields = append(cShell.fields, tf)
 		}
 	}
+	dic.depGraph[typeName] = cShell
 	// if component has no dependency, initialize it first
 	if len(cShell.fields) == 0 {
 		initComponent(typeName, dic.depGraph, dic.components, make(map[string]bool))
 	}
-	dic.depGraph[typeName] = cShell
 }
 
 // Get return component from DI container by qualified type name, initialization may be needed
-func (dic *DIContainer) Get(name string) (interface{}, error) {
+func (dic *DIContainer) Get(hint interface{}) (interface{}, error) {
+	if name, ok := hint.(string); ok {
+		return dic.get(name)
+	}
+	return dic.get(getQualifiedTypeName(reflect.TypeOf(hint)))
+}
+
+func (dic *DIContainer) get(name string) (interface{}, error) {
 	components := dic.components
+	graph := dic.depGraph
+	if _, ok := graph[name]; !ok {
+		return nil, nil
+	}
 	if c, ok := components[name]; ok {
 		return c, nil
 	}

@@ -78,16 +78,17 @@ func isInterfaceType(field reflect.Type) bool {
 	return field.Kind() == reflect.Interface
 }
 
-func callComponentConstructor(template reflect.Value) (componentPtr interface{}, err error) {
+func createComponentInstance(cShell *componentShell) (componentPtr interface{}, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			componentPtr = nil
 			err = fmt.Errorf("%v", e)
 		}
 	}()
-	constructor := template.MethodByName("Constructor")
+	realVal := cShell.realValue
+	constructor := realVal.MethodByName("Constructor")
 	if constructor == zeroValue {
-		return nil, fmt.Errorf("constructor method is missing")
+		return cShell.template, nil
 	}
 	retVals := constructor.Call(nil)
 	if count := len(retVals); count > 1 {
@@ -136,11 +137,7 @@ func initComponent(
 	pathMap map[string]bool,
 ) (interface{}, error) {
 	cShell := depGraph[name]
-	if cShell == nil {
-		return nil, fmt.Errorf("'%s' is not provided(registered)", name)
-	}
 
-	realVal := cShell.realValue
 	pathMap[name] = true
 	for _, tf := range cShell.fields {
 		depName := tf.name
@@ -152,6 +149,9 @@ func initComponent(
 			var err error
 			if isInterfaceType(tf.fType) {
 				componentPtr, err = initInterfaceComponent(tf.fType, depGraph, components, pathMap)
+			} else if depGraph[depName] == nil {
+				eType := tf.fType.Elem()
+				componentPtr = reflect.New(eType).Interface()
 			} else {
 				componentPtr, err = initComponent(depName, depGraph, components, pathMap)
 			}
@@ -167,7 +167,7 @@ func initComponent(
 		tf.fVal.Set(reflect.ValueOf(componentPtr))
 	}
 	// Constructor is value type receiver's to call
-	componentPtr, err := callComponentConstructor(realVal)
+	componentPtr, err := createComponentInstance(cShell)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call Constructor of '%s': %v", name, err)
 	}
