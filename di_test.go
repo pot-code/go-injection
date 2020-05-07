@@ -24,13 +24,14 @@ func (llc *lowLevelComponent) Counter() int {
 }
 
 type topLevelComponent struct {
-	LowLevelComponent iLowLevel     `dep:""`
-	Provided          *providedDep  `dep:""`
-	ZeroValue         *zeroValueDep `dep:""`
+	LowLevelComponent iLowLevel        `dep:""`
+	WithConstructor   *withConstructor `dep:""`
+	Provided          *providedDep     `dep:""`
+	ZeroValue         *zeroValueDep    `dep:""`
 }
 
 func (tlc topLevelComponent) Constructor() *topLevelComponent {
-	return &topLevelComponent{tlc.LowLevelComponent, tlc.Provided, tlc.ZeroValue}
+	return &tlc
 }
 
 type providedDep struct {
@@ -41,6 +42,14 @@ type providedDep struct {
 type zeroValueDep struct {
 	name   string
 	number int
+}
+
+type withConstructor struct {
+	number int
+}
+
+func (wc withConstructor) Constructor() *withConstructor {
+	return &withConstructor{13}
 }
 
 func TestExample(t *testing.T) {
@@ -59,6 +68,7 @@ func TestExample(t *testing.T) {
 	assert.Equal(t, 12, tlc.LowLevelComponent.Counter())
 	assert.Equal(t, 9, tlc.Provided.number)
 	assert.Equal(t, 0, tlc.ZeroValue.number)
+	assert.Equal(t, 13, tlc.WithConstructor.number)
 
 	// Get by qualified name
 	tlcPtr, _ := dic.Get("github.com/pot-code/go-injection/topLevelComponent")

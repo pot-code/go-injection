@@ -63,7 +63,7 @@ func (dic *DIContainer) Register(shell interface{}) {
 	dic.depGraph[typeName] = cShell
 	// if component has no dependency, initialize it first
 	if len(cShell.fields) == 0 {
-		initComponent(typeName, dic.depGraph, dic.components, make(map[string]bool))
+		initComponent(typeName, dic, make(map[string]bool))
 	}
 }
 
@@ -87,9 +87,19 @@ func (dic *DIContainer) get(name string) (interface{}, error) {
 	// record initialization path
 	pathMap := make(map[string]bool)
 	pathMap[name] = true
-	c, err := initComponent(name, dic.depGraph, dic.components, pathMap)
+	c, err := initComponent(name, dic, pathMap)
 	if err != nil {
 		return nil, fmt.Errorf("Error occurred while injecting dependency of '%s':\n  %v", name, err)
 	}
 	return c, nil
+}
+
+// Populate start full initialization
+func (dic *DIContainer) Populate() error {
+	for cname := range dic.depGraph {
+		if _, err := dic.Get(cname); err != nil {
+			return err
+		}
+	}
+	return nil
 }

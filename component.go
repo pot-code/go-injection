@@ -99,12 +99,12 @@ func createComponentInstance(cShell *componentShell) (componentPtr interface{}, 
 
 func initInterfaceComponent(
 	t reflect.Type,
-	depGraph map[string]*componentShell,
-	components map[string]interface{},
+	dic *DIContainer,
 	pathMap map[string]bool,
 ) (interface{}, error) {
 	var impls []*componentShell
 
+	depGraph := dic.depGraph
 	for _, cShell := range depGraph {
 		if reflect.PtrTo(cShell.realType).Implements(t) {
 			impls = append(impls, cShell)
@@ -127,15 +127,16 @@ func initInterfaceComponent(
 	if pathMap[impl.name] {
 		return nil, fmt.Errorf("cycle dependency detected, '%s' and '%s' are depend on each other", impl.name, impl.name)
 	}
-	return initComponent(impl.name, depGraph, components, pathMap)
+	return initComponent(impl.name, dic, pathMap)
 }
 
 func initComponent(
 	name string,
-	depGraph map[string]*componentShell,
-	components map[string]interface{},
+	dic *DIContainer,
 	pathMap map[string]bool,
 ) (interface{}, error) {
+	depGraph := dic.depGraph
+	components := dic.components
 	cShell := depGraph[name]
 
 	pathMap[name] = true
@@ -148,12 +149,14 @@ func initComponent(
 			var componentPtr interface{}
 			var err error
 			if isInterfaceType(tf.fType) {
-				componentPtr, err = initInterfaceComponent(tf.fType, depGraph, components, pathMap)
+				componentPtr, err = initInterfaceComponent(tf.fType, dic, pathMap)
 			} else if depGraph[depName] == nil {
 				eType := tf.fType.Elem()
-				componentPtr = reflect.New(eType).Interface()
+				shell := reflect.New(eType).Interface()
+				dic.Register(shell)
+				componentPtr, err = initComponent(depName, dic, pathMap)
 			} else {
-				componentPtr, err = initComponent(depName, depGraph, components, pathMap)
+				componentPtr, err = initComponent(depName, dic, pathMap)
 			}
 			if err != nil {
 				return nil, err
@@ -174,14 +177,4 @@ func initComponent(
 	components[name] = componentPtr
 	pathMap[name] = false
 	return componentPtr, nil
-}
-
-// Populate start full initialization
-func (dic *DIContainer) Populate() error {
-	for cname := range dic.depGraph {
-		if _, err := dic.Get(cname); err != nil {
-			return err
-		}
-	}
-	return nil
 }
